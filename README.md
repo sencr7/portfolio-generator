@@ -17,6 +17,14 @@ Create, save, preview, edit, and delete personal portfolios using three distinct
 
 If `DATABASE_URL` is missing or the database is unavailable, the app displays a connection error and does not report unsaved data as saved.
 
+## Deploy with Supabase and Vercel
+
+1. In Supabase, open your project and choose **Connect**. Select **Transaction pooler** for a Vercel serverless deployment, then copy its connection string and replace the password placeholder. Do not use the `postgresql://postgres@db...:5432` direct connection for the shared Vercel serverless deployment.
+2. In Vercel, open the project **Settings → Environment Variables** and add `DATABASE_URL` with the Supabase transaction-pooler connection string. Select Production and any other environments you use. Keep this value secret.
+3. Add `PGSSLMODE` with value `require` in the same Vercel environments.
+4. Redeploy after saving the variables. The PostgreSQL client pool is limited to one connection per Vercel instance.
+5. Test creating, retrieving, editing, and deleting a portfolio. A new Supabase database starts empty; existing Railway rows are not copied by changing `DATABASE_URL`.
+
 ## Deploy with Railway
 
 1. Push this project to a GitHub repository and create a Railway project from that repository.

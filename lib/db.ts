@@ -5,12 +5,13 @@ const globalForPostgres = globalThis as typeof globalThis & { portfolioPool?: Po
 export function getPool() {
   const connectionString = process.env.DATABASE_URL;
   if (!connectionString) {
-    throw new Error("DATABASE_URL is not configured. Add your Railway PostgreSQL connection string to the deployment environment.");
+    throw new Error("DATABASE_URL is not configured. Add your PostgreSQL connection string to the deployment environment.");
   }
 
   if (!globalForPostgres.portfolioPool) {
     globalForPostgres.portfolioPool = new Pool({
       connectionString,
+      max: process.env.VERCEL ? 1 : 10,
       ssl: process.env.PGSSLMODE === "require" ? { rejectUnauthorized: false } : undefined,
     });
   }
