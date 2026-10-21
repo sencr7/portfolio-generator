@@ -15,7 +15,7 @@ Create, save, preview, edit, and delete personal portfolios using three distinct
 
 4. Open [http://localhost:3000](http://localhost:3000). The portfolio table is created automatically on the first API request.
 
-If `DATABASE_URL` is missing or the database is unavailable, the app displays a connection error and does not report unsaved data as saved.
+If both `DATABASE_URL` and `DATABASE_POSTGRES_URL` are missing or the database is unavailable, the app displays a connection error and does not report unsaved data as saved.
 
 ## Deploy with Neon and Vercel
 

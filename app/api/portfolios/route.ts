@@ -6,7 +6,7 @@ import { readPortfolio } from "@/lib/portfolio-validation";
 
 function responseError(error: unknown) {
   const message = error instanceof Error ? error.message : "An unexpected database error occurred.";
-  if (message.startsWith("DATABASE_URL is not configured.")) {
+  if (message.startsWith("DATABASE_URL or DATABASE_POSTGRES_URL is not configured.")) {
     return NextResponse.json({ error: message }, { status: 503 });
   }
   if (message.includes("must be") || message.startsWith("Choose one") || message.startsWith("Portfolio information")) {
