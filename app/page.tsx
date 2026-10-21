@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
+import { toJpeg, toPng } from "html-to-image";
 
 type Portfolio = {
   id: string;
@@ -142,6 +143,7 @@ export default function Home() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [exporting, setExporting] = useState<"png" | "jpeg" | null>(null);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<Portfolio | null>(null);
@@ -188,6 +190,12 @@ export default function Home() {
     localStorage.setItem("portfolio-font-size", fontSize);
   }, [fontSize, settingsLoaded, theme]);
 
+  useEffect(() => {
+    if (!notice) return;
+    const timeout = window.setTimeout(() => setNotice(""), 4500);
+    return () => window.clearTimeout(timeout);
+  }, [notice]);
+
   const startNew = () => {
     setDraft(emptyPortfolio);
     setEditingId(null);
@@ -224,6 +232,7 @@ export default function Home() {
       setDraft(({ ...saved }));
       await loadPortfolios();
       setScreen("templates");
+      setNotice("Step 1 complete. Your information is saved. Next, choose a template.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save your portfolio.");
     } finally {
@@ -231,7 +240,14 @@ export default function Home() {
     }
   };
 
-  const selectTemplate = async (template: TemplateName) => {
+  const selectTemplate = (template: TemplateName) => {
+    if (!active) return;
+    setActive((current) => current ? { ...current, template } : current);
+    const selected = templates.find((item) => item.id === template);
+    setNotice(`${selected?.name ?? "Template"} selected. Click Preview to continue.`);
+  };
+
+  const previewSelectedTemplate = async () => {
     if (!active) return;
     setSaving(true);
     setError("");
@@ -239,7 +255,7 @@ export default function Home() {
       const response = await fetch(`/api/portfolios/${active.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...active, template }),
+        body: JSON.stringify(active),
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "Could not update the template.");
@@ -247,6 +263,7 @@ export default function Home() {
       setDraft(({ ...result.portfolio }));
       await loadPortfolios();
       setScreen("preview");
+      setNotice("Step 2 complete. Review your portfolio, then download it as a PNG or JPEG.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not update the template.");
     } finally {
@@ -265,7 +282,6 @@ export default function Home() {
       setPortfolios((current) => current.filter((item) => item.id !== deleteTarget.id));
       setDeleteTarget(null);
       setNotice("Portfolio deleted.");
-      window.setTimeout(() => setNotice(""), 3500);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not delete this portfolio.");
     } finally {
@@ -278,6 +294,36 @@ export default function Home() {
     setDraft(({ ...portfolio }));
     setEditingId(portfolio.id);
     setScreen("preview");
+    setNotice("Portfolio opened. You can edit it or download it as a PNG or JPEG.");
+  };
+
+  const downloadPortfolio = async (format: "png" | "jpeg") => {
+    const element = document.querySelector<HTMLElement>(".preview-canvas .portfolio-paper");
+    if (!element || !active) {
+      setError("The portfolio preview is not ready to download.");
+      return;
+    }
+
+    setExporting(format);
+    setError("");
+    try {
+      await document.fonts.ready;
+      const options = { cacheBust: true, pixelRatio: 2 };
+      const dataUrl = format === "png"
+        ? await toPng(element, options)
+        : await toJpeg(element, { ...options, quality: 0.95, backgroundColor: "#ffffff" });
+      const link = document.createElement("a");
+      const fileName = active.fullName.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "portfolio";
+      link.download = `${fileName}.${format === "jpeg" ? "jpg" : "png"}`;
+      link.href = dataUrl;
+      link.click();
+      setNotice(`Portfolio downloaded as ${format.toUpperCase()}.`);
+    } catch (err) {
+      console.error("Portfolio image export failed:", err);
+      setError("Could not export the image. Check that the profile picture URL allows access, then try again.");
+    } finally {
+      setExporting(null);
+    }
   };
 
   const subtitle = useMemo(() => ({
@@ -331,7 +377,7 @@ export default function Home() {
 
       <div className="page-frame">
         {error && <div className="alert error-alert" role="alert"><span>{error}</span><button onClick={() => setError("")} aria-label="Dismiss error">×</button></div>}
-        {notice && <div className="alert success-alert" role="status"><Icon name="check" size={17} />{notice}</div>}
+        {notice && <div className="alert success-alert step-notice" role="status"><Icon name="check" size={17} />{notice}</div>}
 
         {screen === "home" && <section className="home-screen">
           <div className="home-copy">
@@ -339,7 +385,12 @@ export default function Home() {
             <p className="home-description">Add your details, choose a design, and save your portfolio.</p>
             <div className="hero-actions"><button className="button-primary" onClick={startNew}>Create portfolio <Icon name="arrow" /></button><button className="button-text" onClick={() => setScreen("manage")}>View portfolios <Icon name="arrow" size={16} /></button></div>
           </div>
-          <div className="home-steps"><span>1. Enter your details</span><span>2. Choose a design</span><span>3. Preview and save</span></div>
+          <ol className="home-steps" aria-label="How to use Portfolio Maker">
+            <li><strong>Enter your details</strong><span>Fill in the form and save your information.</span></li>
+            <li><strong>Choose a template</strong><span>Select Simple, Modern, or Creative, then preview it.</span></li>
+            <li><strong>Download or manage</strong><span>Save a PNG/JPEG copy or view, edit, and delete your portfolio.</span></li>
+          </ol>
+          <p className="privacy-note">Saved portfolios are private to this browser profile. Anyone using this browser profile can access them.</p>
         </section>}
 
         {screen !== "home" && <div className="workspace">
@@ -350,6 +401,7 @@ export default function Home() {
           </div>
 
           {screen === "manage" && <section className="manage-section">
+            <p className="privacy-note">Saved portfolios are private to this browser profile. Anyone using this browser profile can access them.</p>
             <div className="section-heading"><h2>{portfolios.length} saved</h2><button className="button-primary small-button" onClick={startNew}><Icon name="plus" size={16} /> Create portfolio</button></div>
             {loading ? <div className="empty-state"><span className="loading-spinner" />Loading...</div> : portfolios.length === 0 ? <div className="empty-state"><span className="empty-icon"><Icon name="grid" size={24} /></span><h3>No portfolios yet</h3><button className="button-primary" onClick={startNew}>Create portfolio <Icon name="arrow" size={16} /></button></div> : <div className="portfolio-grid">{portfolios.map((portfolio) => <article className="manage-card" key={portfolio.id}><button className={`manage-thumbnail thumb-${portfolio.template}`} onClick={() => openPortfolio(portfolio)} aria-label={`Preview ${portfolio.fullName}'s portfolio`}><span className="thumb-label">{portfolio.template}</span><Avatar portfolio={portfolio} className="thumb-avatar" /><strong>{portfolio.fullName || "Untitled portfolio"}</strong><span>{portfolio.title || "Portfolio"}</span><div className="thumb-lines"><i /><i /><i /></div></button><div className="manage-card-info"><div><h3>{portfolio.fullName || "Untitled portfolio"}</h3><p>{portfolio.title || "No title"}</p></div><button className="icon-button" onClick={() => startEdit(portfolio)} aria-label={`Edit ${portfolio.fullName}`}><Icon name="edit" size={17} /></button></div><div className="manage-card-actions"><button onClick={() => openPortfolio(portfolio)}>View <Icon name="arrow" size={15} /></button><button className="delete-action" onClick={() => setDeleteTarget(portfolio)} aria-label={`Delete ${portfolio.fullName}`}><Icon name="trash" size={16} /></button></div></article>)}</div>}
           </section>}
@@ -360,16 +412,15 @@ export default function Home() {
             <div className="form-intro"><span className="step-count">1 <span>/</span> 3</span><div><h2>Personal information</h2><p>Fields marked * are required.</p></div></div>
             <div className="form-section"><div className="form-section-title"><span className="section-index">1</span><div><h3>About you</h3></div></div><div className="fields-grid"><label className="field"><span>Full name <b>*</b></span><input required maxLength={100} value={draft.fullName} onChange={(e) => setField("fullName", e.target.value)} placeholder="Your name" /></label><label className="field"><span>Title</span><input maxLength={120} value={draft.title} onChange={(e) => setField("title", e.target.value)} placeholder="Student, designer, developer..." /></label><label className="field"><span>Email</span><input type="email" maxLength={254} value={draft.email} onChange={(e) => setField("email", e.target.value)} placeholder="name@example.com" /></label><label className="field"><span>Phone</span><input type="tel" maxLength={40} value={draft.phone} onChange={(e) => setField("phone", e.target.value)} placeholder="Phone number" /></label><label className="field"><span>Address</span><input maxLength={200} value={draft.address} onChange={(e) => setField("address", e.target.value)} placeholder="City, country" /></label><label className="field"><span>Profile picture URL</span><input type="url" maxLength={1000} value={draft.picture} onChange={(e) => setField("picture", e.target.value)} placeholder="https://example.com/photo.jpg" /><small>Use a public image URL.</small></label></div></div>
             <div className="form-section"><div className="form-section-title"><span className="section-index">2</span><div><h3>Education and work</h3></div></div><div className="fields-grid"><label className="field field-full"><span>About me</span><textarea rows={4} maxLength={2000} value={draft.about} onChange={(e) => setField("about", e.target.value)} placeholder="Write a short introduction." /></label><label className="field"><span>Education</span><textarea rows={4} maxLength={2000} value={draft.education} onChange={(e) => setField("education", e.target.value)} placeholder={"One item per line\nSchool, program, year"} /><small>One item per line.</small></label><label className="field"><span>Work experience</span><textarea rows={4} maxLength={3000} value={draft.experience} onChange={(e) => setField("experience", e.target.value)} placeholder={"One job per line\nJob title, company, year"} /><small>One job per line.</small></label><label className="field"><span>Skills</span><textarea rows={3} maxLength={1200} value={draft.skills} onChange={(e) => setField("skills", e.target.value)} placeholder={"One skill per line\nWriting\nCoding"} /><small>One skill per line.</small></label><label className="field"><span>Projects</span><textarea rows={3} maxLength={3000} value={draft.projects} onChange={(e) => setField("projects", e.target.value)} placeholder={"One project per line\nProject name and short description"} /><small>One project per line.</small></label><label className="field field-full"><span>Social media and website links</span><textarea rows={3} maxLength={2000} value={draft.links} onChange={(e) => setField("links", e.target.value)} placeholder={"One URL per line\nhttps://example.com"} /><small>One URL per line. Optional label: Instagram | URL</small></label></div></div>
-            {active && <button className="form-change-template" type="button" onClick={() => { setActive({ ...active, ...draft }); setScreen("templates"); }}><Icon name="grid" size={16} /> Change your template <span>{active.template}</span></button>}
               </div>
               <aside className="form-live-preview"><h2>Preview</h2><PortfolioPreview portfolio={draftPreview} /></aside>
             </div>
             <div className="form-footer"><span><span className="required-star">*</span> Required</span><button type="submit" className="button-primary" disabled={saving}>{saving ? "Saving…" : editingId ? "Save changes" : "Save & choose design"} {!saving && <Icon name="arrow" size={17} />}</button></div>
           </form>}
 
-          {screen === "templates" && active && <section className="template-section">          <div className="template-step"><span className="step-count">2 <span>/</span> 3</span><div><h2>Select a template</h2></div></div><div className="template-options">{templates.map((template) => <button className={`template-choice ${active.template === template.id ? "selected" : ""}`} key={template.id} onClick={() => void selectTemplate(template.id)} disabled={saving}><div className={`template-swatch swatch-${template.id}`}><div className="swatch-window"><span>{active.fullName || "Your Name"}</span><i /><i /><i /></div><span className="swatch-number">{template.number}</span></div><div className="template-choice-info"><div><h3>{template.name}</h3><p>{template.descriptor}</p></div><span className="template-radio">{active.template === template.id && <Icon name="check" size={14} />}</span></div></button>)}</div><div className="template-footer"><span>3 / 3</span><button className="button-primary" onClick={() => setScreen("preview")} disabled={saving}>Preview <Icon name="arrow" size={17} /></button></div></section>}
+          {screen === "templates" && active && <section className="template-section"><div className="template-step"><span className="step-count">2 <span>/</span> 3</span><div><h2>Select a template</h2><p>Choose a design, then press Preview to continue.</p></div></div><div className="template-options">{templates.map((template) => <button type="button" aria-pressed={active.template === template.id} className={`template-choice ${active.template === template.id ? "selected" : ""}`} key={template.id} onClick={() => selectTemplate(template.id)} disabled={saving}><div className={`template-swatch swatch-${template.id}`}><div className="swatch-window"><span>{active.fullName || "Your Name"}</span><i /><i /><i /></div><span className="swatch-number">{template.number}</span></div><div className="template-choice-info"><div><h3>{template.name}</h3><p>{template.descriptor}</p></div><span className="template-radio">{active.template === template.id && <Icon name="check" size={14} />}</span></div></button>)}</div><div className="template-footer"><span>Choose a template before continuing.</span><button className="button-primary" onClick={() => void previewSelectedTemplate()} disabled={saving}>{saving ? "Saving…" : "Preview selected template"} {!saving && <Icon name="arrow" size={17} />}</button></div></section>}
 
-          {screen === "preview" && active && <section className="preview-section"><div className="preview-toolbar"><div><span className="step-count">3 <span>/</span> 3</span><div><h2>Portfolio preview</h2></div></div><div className="preview-actions"><button className="button-secondary" onClick={() => startEdit(active)}><Icon name="edit" size={16} /> Edit</button><button className="button-primary" onClick={() => window.print()}><Icon name="external" size={16} /> Print</button></div></div><div className="preview-canvas"><div className="preview-page-label"><span><span className="live-dot" /> PREVIEW</span><button onClick={() => setScreen("templates")}><Icon name="grid" size={15} /> {active.template} <span>· Change</span></button></div><PortfolioPreview portfolio={active} /></div><div className="preview-bottom"><div><h3>Portfolio saved</h3></div><button className="button-primary" onClick={() => setScreen("manage")}>View portfolios <Icon name="arrow" size={17} /></button></div></section>}
+          {screen === "preview" && active && <section className="preview-section"><div className="preview-toolbar"><div><span className="step-count">3 <span>/</span> 3</span><div><h2>Portfolio preview</h2><p>Review your portfolio. Download a copy or return to edit it.</p></div></div><div className="preview-actions"><button className="button-secondary" onClick={() => startEdit(active)}><Icon name="edit" size={16} /> Edit</button><button className="button-primary" onClick={() => void downloadPortfolio("png")} disabled={exporting !== null}>{exporting === "png" ? "Preparing PNG…" : "Download PNG"}</button><button className="button-primary" onClick={() => void downloadPortfolio("jpeg")} disabled={exporting !== null}>{exporting === "jpeg" ? "Preparing JPEG…" : "Download JPEG"}</button></div></div><div className="preview-canvas"><div className="preview-page-label"><span><span className="live-dot" /> PREVIEW</span><button onClick={() => setScreen("templates")}><Icon name="grid" size={15} /> {active.template} <span>· Change</span></button></div><PortfolioPreview portfolio={active} /></div><div className="preview-bottom"><div><h3>Portfolio saved</h3><p>Step 3 complete. Your portfolio is saved in this browser’s private list.</p></div><button className="button-primary" onClick={() => setScreen("manage")}>View portfolios <Icon name="arrow" size={17} /></button></div></section>}
         </div>}
       </div>
 

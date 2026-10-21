@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { ensurePortfolioTable, getPool } from "@/lib/db";
+import { getPortfolioOwnerId } from "@/lib/portfolio-owner";
 import { readPortfolio } from "@/lib/portfolio-validation";
 
 type RouteContext = { params: Promise<{ id: string }> };
@@ -24,11 +25,12 @@ export async function PUT(request: Request, context: RouteContext) {
   const { id } = await context.params;
   if (invalidId(id)) return NextResponse.json({ error: "Portfolio not found." }, { status: 404 });
   try {
+    const ownerId = await getPortfolioOwnerId();
     const data = readPortfolio(await request.json());
     await ensurePortfolioTable();
     const { rows } = await getPool().query(
-      "UPDATE portfolios SET data = $2::jsonb, updated_at = NOW() WHERE id = $1 RETURNING id, data, updated_at",
-      [id, JSON.stringify(data)],
+      "UPDATE portfolios SET data = $3::jsonb, updated_at = NOW() WHERE id = $1 AND owner_id = $2 RETURNING id, data, updated_at",
+      [id, ownerId, JSON.stringify(data)],
     );
     if (!rows[0]) return NextResponse.json({ error: "Portfolio not found." }, { status: 404 });
     return NextResponse.json({
@@ -43,8 +45,9 @@ export async function DELETE(_request: Request, context: RouteContext) {
   const { id } = await context.params;
   if (invalidId(id)) return NextResponse.json({ error: "Portfolio not found." }, { status: 404 });
   try {
+    const ownerId = await getPortfolioOwnerId();
     await ensurePortfolioTable();
-    const { rowCount } = await getPool().query("DELETE FROM portfolios WHERE id = $1", [id]);
+    const { rowCount } = await getPool().query("DELETE FROM portfolios WHERE id = $1 AND owner_id = $2", [id, ownerId]);
     if (!rowCount) return NextResponse.json({ error: "Portfolio not found." }, { status: 404 });
     return NextResponse.json({ success: true });
   } catch (error) {

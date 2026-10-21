@@ -35,6 +35,10 @@ The API creates the `portfolios` table automatically. Each portfolio is saved as
 - Live portfolio preview and browser print/save.
 - PostgreSQL-backed create, retrieve, update, and delete API.
 - Manage page for reopening, editing, and deleting saved portfolios.
+- Per-browser portfolio ownership using an HTTP-only cookie; portfolios are not shared across browsers or devices. Anyone using the same browser profile can access its saved portfolios.
+- Download the portfolio preview as PNG or JPEG.
+
+Older rows created before per-browser ownership was introduced have no owner ID and are intentionally omitted from the private portfolio list. They remain in the database unless separately removed.
 
 ## Useful commands
 

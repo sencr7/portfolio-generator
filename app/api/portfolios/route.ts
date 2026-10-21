@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { ensurePortfolioTable, getPool } from "@/lib/db";
+import { getPortfolioOwnerId } from "@/lib/portfolio-owner";
 import { readPortfolio } from "@/lib/portfolio-validation";
 
 function responseError(error: unknown) {
@@ -17,9 +18,11 @@ function responseError(error: unknown) {
 
 export async function GET() {
   try {
+    const ownerId = await getPortfolioOwnerId();
     await ensurePortfolioTable();
     const { rows } = await getPool().query(
-      "SELECT id, data, updated_at FROM portfolios ORDER BY updated_at DESC",
+      "SELECT id, data, updated_at FROM portfolios WHERE owner_id = $1 ORDER BY updated_at DESC",
+      [ownerId],
     );
     const portfolios = rows.map((row) => ({
       ...row.data,
@@ -34,12 +37,13 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    const ownerId = await getPortfolioOwnerId();
     const data = readPortfolio(await request.json());
     await ensurePortfolioTable();
     const id = randomUUID();
     const { rows } = await getPool().query(
-      "INSERT INTO portfolios (id, data) VALUES ($1, $2::jsonb) RETURNING id, data, updated_at",
-      [id, JSON.stringify(data)],
+      "INSERT INTO portfolios (id, owner_id, data) VALUES ($1, $2, $3::jsonb) RETURNING id, data, updated_at",
+      [id, ownerId, JSON.stringify(data)],
     );
     return NextResponse.json({
       portfolio: { ...rows[0].data, id: rows[0].id, updatedAt: rows[0].updated_at },

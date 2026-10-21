@@ -21,9 +21,12 @@ export async function ensurePortfolioTable() {
   await getPool().query(`
     CREATE TABLE IF NOT EXISTS portfolios (
       id UUID PRIMARY KEY,
+      owner_id UUID,
       data JSONB NOT NULL,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `);
+  await getPool().query("ALTER TABLE portfolios ADD COLUMN IF NOT EXISTS owner_id UUID");
+  await getPool().query("CREATE INDEX IF NOT EXISTS portfolios_owner_updated_idx ON portfolios (owner_id, updated_at DESC)");
 }
