@@ -3,9 +3,9 @@ import { Pool } from "pg";
 const globalForPostgres = globalThis as typeof globalThis & { portfolioPool?: Pool };
 
 export function getPool() {
-  const connectionString = process.env.DATABASE_URL;
+  const connectionString = process.env.DATABASE_URL ?? process.env.DATABASE_POSTGRES_URL;
   if (!connectionString) {
-    throw new Error("DATABASE_URL is not configured. Add your PostgreSQL connection string to the deployment environment.");
+    throw new Error("DATABASE_URL or DATABASE_POSTGRES_URL is not configured. Add your PostgreSQL connection string to the deployment environment.");
   }
 
   if (!globalForPostgres.portfolioPool) {

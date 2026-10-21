@@ -4,7 +4,7 @@ Create, save, preview, edit, and delete personal portfolios using three distinct
 
 ## Run locally
 
-1. Create a PostgreSQL database and set `DATABASE_URL` in `.env.local` to its connection string.
+1. Create a PostgreSQL database and set `DATABASE_URL` in `.env.local` to its connection string. The app also accepts `DATABASE_POSTGRES_URL`.
 2. If the database requires TLS, also set `PGSSLMODE=require`.
 3. Install dependencies and start Next.js:
 
@@ -17,21 +17,13 @@ Create, save, preview, edit, and delete personal portfolios using three distinct
 
 If `DATABASE_URL` is missing or the database is unavailable, the app displays a connection error and does not report unsaved data as saved.
 
-## Deploy with Supabase and Vercel
+## Deploy with Neon and Vercel
 
-1. In Supabase, open your project and choose **Connect**. Select **Transaction pooler** for a Vercel serverless deployment, then copy its connection string and replace the password placeholder. Do not use the `postgresql://postgres@db...:5432` direct connection for the shared Vercel serverless deployment.
-2. In Vercel, open the project **Settings → Environment Variables** and add `DATABASE_URL` with the Supabase transaction-pooler connection string. Select Production and any other environments you use. Keep this value secret.
-3. Add `PGSSLMODE` with value `require` in the same Vercel environments.
-4. Redeploy after saving the variables. The PostgreSQL client pool is limited to one connection per Vercel instance.
-5. Test creating, retrieving, editing, and deleting a portfolio. A new Supabase database starts empty; existing Railway rows are not copied by changing `DATABASE_URL`.
-
-## Deploy with Railway
-
-1. Push this project to a GitHub repository and create a Railway project from that repository.
-2. Add a **PostgreSQL** service to the Railway project.
-3. In the web service's variables, add `DATABASE_URL` with a reference to the PostgreSQL service's `DATABASE_URL` variable (Railway's **Add Reference** control). If using an external TLS-required PostgreSQL endpoint, also set `PGSSLMODE=require`.
-4. Deploy the web service. Its build and start commands are `npm run build` and `npm run start`; Railway can detect Next.js automatically.
-5. In the web service's settings, generate a public domain and open it to test creating, editing, refreshing, and deleting portfolios.
+1. Create a Neon PostgreSQL database through Vercel's **Storage** page and connect it to the project for the **Production** environment.
+2. If you use the integration's custom environment variable prefix `DATABASE`, it creates `DATABASE_POSTGRES_URL`. The app accepts this variable directly; alternatively, set `DATABASE_URL` to the same pooled Neon connection string.
+3. Keep the generated connection string secret. Set `PGSSLMODE=require` if required by the provider.
+4. Redeploy after connecting the database. The PostgreSQL client pool is limited to one connection per Vercel instance.
+5. Test creating, retrieving, editing, and deleting a portfolio. A new Neon database starts empty; existing Railway or Supabase rows are not copied automatically.
 
 The API creates the `portfolios` table automatically. Each portfolio is saved as a JSONB record with a UUID and database-managed created/updated timestamps.
 
